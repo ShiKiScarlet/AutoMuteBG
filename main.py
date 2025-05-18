@@ -14,6 +14,7 @@ from utils.PIDLockUtil import PIDLockUtil
 from utils.ShutdownUtil import ShutdownUtil
 from utils.StrayUtil import StrayUtil
 from utils.ThreadUtil import ThreadUtil
+from utils.ConfigWatcherUtil import ConfigWatcherUtil
 
 
 def configure(binder):
@@ -51,6 +52,10 @@ def main():
     stray_util = injector.get(StrayUtil)
     stray_util.run_detached()
 
+    # 启动配置监控
+    config_watcher = injector.get(ConfigWatcherUtil)
+    config_watcher.start_watching()
+
     thread_util = injector.get(ThreadUtil)
     threading.Thread(
         target=thread_util.background_scanner,
@@ -60,6 +65,9 @@ def main():
 
     shutdown_util = injector.get(ShutdownUtil)
     shutdown_util.loop()
+
+    # 停止配置监控
+    config_watcher.stop_watching()
 
 
 if __name__ == '__main__':

@@ -61,7 +61,7 @@ class ConfigUtil:
                     merged[key] = value
             return merged
 
-        process_config = self.config["processes"][process_name]
+        process_config = self.config["processes"].get(process_name)
         if process_config is None:
             return self.config["default"]
         default_config = self.config["default"].copy()

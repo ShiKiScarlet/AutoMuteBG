@@ -1,3 +1,4 @@
 injector
 pycaw
 pystray
+watchdog
