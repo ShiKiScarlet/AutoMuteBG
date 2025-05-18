@@ -143,7 +143,7 @@ class GUIUtil:
         """启动自动刷新定时器"""
         if self.auto_refresh_timer:
             self.root.after_cancel(self.auto_refresh_timer)
-        self.auto_refresh_timer = self.root.after(5000, self.auto_refresh)  # 每5秒刷新一次
+        self.auto_refresh_timer = self.root.after(1000, self.auto_refresh)  # 每1秒刷新一次
 
     def auto_refresh(self):
         """自动刷新进程列表"""
