@@ -80,11 +80,15 @@ class GUIUtil:
             with open(self.config_util.config_file, 'r', encoding='utf-8') as f:
                 config = yaml.safe_load(f)
 
-            # 更新进程列表
-            config['processes'] = {}
+            # 更新进程列表，只修改发生变化的进程
             for process_name, var in self.process_vars.items():
-                if var.get():
+                is_checked = var.get()
+                if is_checked and process_name not in config['processes']:
+                    # 添加新勾选的进程
                     config['processes'][process_name] = None
+                elif not is_checked and process_name in config['processes']:
+                    # 移除取消勾选的进程
+                    del config['processes'][process_name]
 
             # 保存配置
             with open(self.config_util.config_file, 'w', encoding='utf-8') as f:
