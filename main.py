@@ -15,6 +15,7 @@ from utils.ShutdownUtil import ShutdownUtil
 from utils.StrayUtil import StrayUtil
 from utils.ThreadUtil import ThreadUtil
 from utils.ConfigWatcherUtil import ConfigWatcherUtil
+from utils.GUIUtil import GUIUtil
 
 
 def configure(binder):
@@ -49,25 +50,41 @@ def check_lock():
 
 
 def main():
+    # 初始化GUI
+    gui_util = injector.get(GUIUtil)
+    gui_util.create_gui()  # 创建GUI
+    gui_util.show()  # 显示GUI
+
+    # 启动其他组件
     stray_util = injector.get(StrayUtil)
-    stray_util.run_detached()
+    config_watcher = injector.get(ConfigWatcherUtil)
+    thread_util = injector.get(ThreadUtil)
 
     # 启动配置监控
-    config_watcher = injector.get(ConfigWatcherUtil)
     config_watcher.start_watching()
 
-    thread_util = injector.get(ThreadUtil)
+    # 启动后台扫描线程
     threading.Thread(
         target=thread_util.background_scanner,
         name="BGScannerThread",
         daemon=True
     ).start()
 
-    shutdown_util = injector.get(ShutdownUtil)
-    shutdown_util.loop()
+    # 启动系统托盘图标
+    stray_util.run_detached()
+
+    # 运行GUI主循环
+    gui_util.root.mainloop()
 
     # 停止配置监控
     config_watcher.stop_watching()
+
+    # 等待退出事件
+    event = injector.get(threading.Event)
+    event.wait()
+
+    # 清理资源
+    lock_util.remove_lock()
 
 
 if __name__ == '__main__':
@@ -78,8 +95,6 @@ if __name__ == '__main__':
 
     logger.info("Starting main function.")
     main()
-
-    lock_util.remove_lock()
 
 # 打包用
 print(pywintypes)

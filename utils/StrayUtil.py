@@ -1,16 +1,16 @@
 import os
 import threading
 import webbrowser
-
-import pkg_resources
 import pystray
 import win32api
+import win32con
 from PIL import Image
 from injector import singleton, inject
 
 from utils.GetProcessUtil import get_all_audio_sessions, get_all_window_processes
 from utils.ConfigUtil import ConfigUtil
 from utils.LoggerUtil import LoggerUtil
+from utils.GUIUtil import GUIUtil
 
 
 def _open_site():
@@ -20,38 +20,75 @@ def _open_site():
 @singleton
 class StrayUtil:
     @inject
-    def __init__(self, config_util: ConfigUtil, logger_util: LoggerUtil, event: threading.Event):
+    def __init__(self, config_util: ConfigUtil, logger_util: LoggerUtil, 
+                 event: threading.Event, gui_util: GUIUtil):
         self.setup_msg = config_util.config["setting"]["setup_msg"]
         self.logger = logger_util.logger
         self.event = event
-        
+        self.gui_util = gui_util
+        self.icon = None
+        self.logger.info("StrayUtil initialized")
 
-        name = "后台静音"
+    def run_detached(self):
+        """在后台运行系统托盘图标"""
+        self.logger.info("Starting stray.")
+        icon_path = os.path.join("resource", "mute.ico")
+        image = Image.open(icon_path)
+
+        def on_clicked(icon, item):
+            """处理托盘图标的点击事件"""
+            self.logger.info("Tray icon clicked")
+            self.gui_util.show()
+
+        def on_exit(icon, item):
+            """处理退出事件"""
+            self.logger.info("Exiting by StrayUtil.")
+            self.event.set()
+            icon.stop()
+            self.gui_util.quit()
+
+        def on_icon_ready(icon):
+            """图标准备就绪时的回调"""
+            icon.visible = True
+            if self.setup_msg:
+                icon.notify("程序启动成功，点击托盘图标打开设置")
+            threading.current_thread().setName("StrayRunCallbackThread")
+            self.logger.info("Stray is running.")
+
+        # 创建菜单
         menu = pystray.Menu(
+            pystray.MenuItem("进程列表", self._save_process_list_to_txt),
             pystray.MenuItem("关于", self.show_version_info),
             pystray.MenuItem("开源地址", _open_site),
-            pystray.MenuItem("进程列表", self._save_process_list_to_txt),
-            pystray.MenuItem("退出", self.exit_app)
+            pystray.MenuItem(
+                "退出",
+                on_exit
+            )
         )
-        icon = Image.open(pkg_resources.resource_filename(__name__, "../resource/mute.ico"))
 
-        self.icon = pystray.Icon(name, icon, name, menu)
-    
+        # 创建系统托盘图标
+        self.icon = pystray.Icon(
+            "AutoMuteBG",
+            image,
+            "AutoMuteBG",
+            menu
+        )
+
+        # 设置点击事件
+        self.icon.left_click = on_clicked
+
+        # 在新线程中运行
+        threading.Thread(
+            target=self.icon.run,
+            args=(on_icon_ready,),
+            name="StrayThread",
+            daemon=True
+        ).start()
+
     def show_version_info(self):
         version_info = "后台应用自动静音器\n让设定的进程在后台时自动静音，切换到前台恢复。\n版本: 0.2.2 Dev\n开源地址: github.com/lingkai5wu/AutoMuteBG"
         win32api.MessageBox(0, version_info, "关于Auto Mute Background", 0x40) 
     
-    def run_detached(self):
-        def on_icon_ready(icon):
-            icon.visible = True
-            if self.setup_msg:
-                icon.notify("程序启动成功，在系统托盘右键菜单中退出")
-            threading.current_thread().setName("StrayRunCallbackThread")
-            self.logger.info("Stray is running.")
-
-        self.logger.info("Starting stray.")
-        threading.Thread(target=self.icon.run, args=(on_icon_ready,), name="StrayThread").start()
-
     def _save_process_list_to_txt(self):
         filename = "process_name.txt"
         window_processes = get_all_window_processes()
@@ -74,8 +111,3 @@ class StrayUtil:
                 file.write(f"{process_name}\n")
         self.logger.info(f"Process list saved to {filename}.")
         os.startfile(filename)
-
-    def exit_app(self):
-        self.logger.info("Exiting by StrayUtil.")
-        self.event.set()
-        self.icon.stop()
