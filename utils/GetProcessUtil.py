@@ -26,3 +26,12 @@ def get_all_window_processes():
 
     win32gui.EnumWindows(enum_window_callback, None)
     return window_processes
+
+def get_real_time_process_list():
+    """
+    获取实时的进程列表，包括窗口进程和音频会话
+    返回: (window_processes, audio_sessions)
+    """
+    window_processes = get_all_window_processes()
+    audio_sessions = get_all_audio_sessions()
+    return window_processes, audio_sessions

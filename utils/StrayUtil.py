@@ -8,7 +8,7 @@ from PIL import Image
 from injector import singleton, inject
 import sys
 
-from utils.GetProcessUtil import get_all_audio_sessions, get_all_window_processes
+from utils.GetProcessUtil import get_real_time_process_list
 from utils.ConfigUtil import ConfigUtil
 from utils.LoggerUtil import LoggerUtil
 from utils.GUIUtil import GUIUtil
@@ -105,9 +105,7 @@ class StrayUtil:
     
     def _save_process_list_to_txt(self):
         filename = "process_name.txt"
-        window_processes = get_all_window_processes()
-        print(window_processes)
-        audio_sessions = get_all_audio_sessions()
+        window_processes, audio_sessions = get_real_time_process_list()
         with open(filename, 'w', encoding="utf-8") as file:
             if window_processes:
                 file.write("当前在窗口管理器中注册的进程：\n窗口标题 - 进程名\n")

@@ -10,7 +10,7 @@ import yaml
 import sys
 from injector import singleton, inject
 
-from utils.GetProcessUtil import get_all_audio_sessions
+from utils.GetProcessUtil import get_real_time_process_list
 from utils.ConfigUtil import ConfigUtil
 from utils.LoggerUtil import LoggerUtil
 
@@ -25,13 +25,15 @@ class GUIUtil:
         self.process_vars = {}  # 存储进程的复选框变量
         self.process_icons = {}  # 存储进程的图标
         self.is_visible = False
+        self.scrollable_frame = None
+        self.auto_refresh_timer = None
         self.logger.info("GUIUtil initialized")
 
     def get_process_icon(self, process_name):
         """获取进程的图标"""
         try:
             # 获取进程路径
-            for session in get_all_audio_sessions():
+            for session in get_real_time_process_list()[1]:  # 使用新的实时获取函数
                 if session.Process.name() == process_name:
                     exe_path = session.Process.exe()
                     break
@@ -94,6 +96,61 @@ class GUIUtil:
         except Exception as e:
             self.logger.error(f"Error updating config: {str(e)}")
 
+    def refresh_process_list(self):
+        """刷新进程列表"""
+        self.logger.info("Refreshing process lists...")
+        try:
+            # 清除现有的复选框
+            for widget in self.scrollable_frame.winfo_children():
+                widget.destroy()
+            self.process_vars.clear()
+            self.process_icons.clear()
+
+            # 获取最新的进程列表
+            window_processes, audio_sessions = get_real_time_process_list()
+            self.logger.info(f"Process lists refreshed. Found {len(window_processes)} window processes and {len(audio_sessions)} audio sessions")
+
+            # 获取当前配置的进程
+            current_processes = set(self.config_util.config['processes'].keys())
+
+            # 为每个进程创建复选框
+            for session in audio_sessions:
+                process_name = session.Process.name()
+                if process_name not in self.process_vars:
+                    var = tk.BooleanVar(value=process_name in current_processes)
+                    self.process_vars[process_name] = var
+
+                    # 获取进程图标
+                    icon = self.get_process_icon(process_name)
+                    self.process_icons[process_name] = icon
+
+                    # 创建复选框
+                    cb = ttk.Checkbutton(
+                        self.scrollable_frame,
+                        text=process_name,
+                        variable=var,
+                        image=icon if icon else None,
+                        compound=tk.LEFT,
+                        command=self.update_config
+                    )
+                    cb.pack(anchor=tk.W, padx=5, pady=2)
+
+            self.logger.info("Process list refreshed successfully")
+        except Exception as e:
+            self.logger.error(f"Error refreshing process list: {str(e)}")
+
+    def start_auto_refresh(self):
+        """启动自动刷新定时器"""
+        if self.auto_refresh_timer:
+            self.root.after_cancel(self.auto_refresh_timer)
+        self.auto_refresh_timer = self.root.after(5000, self.auto_refresh)  # 每5秒刷新一次
+
+    def auto_refresh(self):
+        """自动刷新进程列表"""
+        if self.is_visible:
+            self.refresh_process_list()
+        self.start_auto_refresh()
+
     def create_gui(self):
         """创建图形界面"""
         self.logger.info("Creating GUI...")
@@ -111,6 +168,18 @@ class GUIUtil:
             main_frame = ttk.Frame(self.root)
             main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
+            # 创建顶部按钮框架
+            button_frame = ttk.Frame(main_frame)
+            button_frame.pack(fill=tk.X, pady=(0, 10))
+
+            # 创建刷新按钮
+            refresh_button = ttk.Button(
+                button_frame,
+                text="刷新进程列表",
+                command=self.refresh_process_list
+            )
+            refresh_button.pack(side=tk.RIGHT)
+
             # 创建说明标签
             label = ttk.Label(
                 main_frame,
@@ -122,42 +191,15 @@ class GUIUtil:
             # 创建画布和滚动条
             canvas = tk.Canvas(main_frame)
             scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
-            scrollable_frame = ttk.Frame(canvas)
+            self.scrollable_frame = ttk.Frame(canvas)
 
-            scrollable_frame.bind(
+            self.scrollable_frame.bind(
                 "<Configure>",
                 lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
             )
 
-            canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+            canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
             canvas.configure(yscrollcommand=scrollbar.set)
-
-            # 获取所有音频会话
-            sessions = get_all_audio_sessions()
-            current_processes = set(self.config_util.config['processes'].keys())
-            self.logger.info(f"Found {len(sessions)} audio sessions")
-
-            # 为每个进程创建复选框
-            for session in sessions:
-                process_name = session.Process.name()
-                if process_name not in self.process_vars:
-                    var = tk.BooleanVar(value=process_name in current_processes)
-                    self.process_vars[process_name] = var
-
-                    # 获取进程图标
-                    icon = self.get_process_icon(process_name)
-                    self.process_icons[process_name] = icon
-
-                    # 创建复选框
-                    cb = ttk.Checkbutton(
-                        scrollable_frame,
-                        text=process_name,
-                        variable=var,
-                        image=icon if icon else None,
-                        compound=tk.LEFT,
-                        command=self.update_config
-                    )
-                    cb.pack(anchor=tk.W, padx=5, pady=2)
 
             # 放置画布和滚动条
             canvas.pack(side="left", fill="both", expand=True)
@@ -173,6 +215,12 @@ class GUIUtil:
                 self.logger.info("Window closing")
                 self.hide()  # 隐藏窗口而不是退出程序
             self.root.protocol("WM_DELETE_WINDOW", on_closing)
+
+            # 初始刷新进程列表
+            self.refresh_process_list()
+            
+            # 启动自动刷新
+            self.start_auto_refresh()
 
             self.logger.info("GUI creation completed")
         except Exception as e:
@@ -194,6 +242,10 @@ class GUIUtil:
                 self.logger.info("Window lifted")
                 self.root.focus_force()  # 强制获取焦点
                 self.logger.info("Window focus forced")
+                # 刷新进程列表
+                self.refresh_process_list()
+                # 重新启动自动刷新
+                self.start_auto_refresh()
             self.is_visible = True
             self.logger.info("Window shown successfully")
         except Exception as e:
@@ -209,6 +261,10 @@ class GUIUtil:
                 self.root.withdraw()  # 使用withdraw而不是destroy
                 self.logger.info("Window withdrawn")
                 self.is_visible = False
+                # 停止自动刷新
+                if self.auto_refresh_timer:
+                    self.root.after_cancel(self.auto_refresh_timer)
+                    self.auto_refresh_timer = None
                 self.logger.info("Window hidden successfully")
             else:
                 self.logger.info("Root window is None, nothing to hide")
@@ -220,6 +276,10 @@ class GUIUtil:
         """退出图形界面"""
         self.logger.info("Quit GUI requested")
         if self.root is not None:
+            # 停止自动刷新
+            if self.auto_refresh_timer:
+                self.root.after_cancel(self.auto_refresh_timer)
+                self.auto_refresh_timer = None
             self.root.quit()  # 停止主循环
             self.root.destroy()  # 销毁窗口
             self.root = None
