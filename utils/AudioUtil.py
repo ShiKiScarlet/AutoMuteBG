@@ -91,9 +91,11 @@ class AudioUtil:
                 time.sleep(self.config["loop_interval"])
         finally:
             self.stop_easing_thread = True
-            # 确保在退出时恢复前台音量
+            # 当线程被停止时，恢复原始音量
             try:
-                self.session.SimpleAudioVolume.SetMasterVolume(self.config["fg_volume"], None)
+                original_volume = self.session.SimpleAudioVolume.GetMasterVolume()
+                if original_volume == self.config["bg_volume"]:
+                    self.session.SimpleAudioVolume.SetMasterVolume(self.config["fg_volume"], None)
             except Exception as e:
                 self.logger.error(f"Error setting final volume: {str(e)}")
             self.logger.info("Exiting loop.")

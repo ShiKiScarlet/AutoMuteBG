@@ -36,6 +36,16 @@ class ThreadUtil:
             # 获取当前正在运行的音频控制线程的进程名
             running_processes = set(self.audio_threads.keys())
 
+            # 停止不再需要的线程
+            for process_name in list(self.audio_threads.keys()):
+                if process_name not in configured_processes:
+                    self.logger.info(f"Stopping audio control for unchecked process: {process_name}")
+                    if process_name in self.thread_events:
+                        self.thread_events[process_name].set()  # 设置事件以停止线程
+                        self.audio_threads[process_name].join(timeout=2)  # 等待线程结束
+                        del self.thread_events[process_name]
+                    del self.audio_threads[process_name]
+
             # 启动新的音频控制线程
             for session in sessions:
                 process_name = session.Process.name()
