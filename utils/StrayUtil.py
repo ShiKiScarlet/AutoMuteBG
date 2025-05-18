@@ -35,11 +35,6 @@ class StrayUtil:
         icon_path = os.path.join("resource", "mute.ico")
         image = Image.open(icon_path)
 
-        def on_clicked(icon, item):
-            """处理托盘图标的点击事件"""
-            self.logger.info("Tray icon clicked")
-            self.gui_util.show()
-
         def on_exit(icon, item):
             """处理退出事件"""
             self.logger.info("Exiting by StrayUtil.")
@@ -55,8 +50,18 @@ class StrayUtil:
             threading.current_thread().setName("StrayRunCallbackThread")
             self.logger.info("Stray is running.")
 
+        def show_settings(icon, item):
+            """显示设置窗口"""
+            self.logger.info("Show settings requested from tray menu")
+            try:
+                self.gui_util.show()
+                self.logger.info("GUI show method called successfully")
+            except Exception as e:
+                self.logger.error(f"Error showing GUI: {str(e)}")
+
         # 创建菜单
         menu = pystray.Menu(
+            pystray.MenuItem("显示设置", show_settings),
             pystray.MenuItem("进程列表", self._save_process_list_to_txt),
             pystray.MenuItem("关于", self.show_version_info),
             pystray.MenuItem("开源地址", _open_site),
@@ -73,9 +78,6 @@ class StrayUtil:
             "AutoMuteBG",
             menu
         )
-
-        # 设置点击事件
-        self.icon.left_click = on_clicked
 
         # 在新线程中运行
         threading.Thread(
@@ -111,3 +113,7 @@ class StrayUtil:
                 file.write(f"{process_name}\n")
         self.logger.info(f"Process list saved to {filename}.")
         os.startfile(filename)
+
+    def _show_settings(self):
+        # Implementation of _show_settings method
+        pass

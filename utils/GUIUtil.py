@@ -182,21 +182,39 @@ class GUIUtil:
     def show(self):
         """显示图形界面"""
         self.logger.info("Show GUI requested")
-        if self.root is None:
-            self.logger.info("Creating new GUI")
-            self.create_gui()
-        self.root.deiconify()
-        self.root.lift()
-        self.is_visible = True
-        self.logger.info("Window shown")
+        try:
+            if self.root is None:
+                self.logger.info("Root window is None, creating new GUI")
+                self.create_gui()
+            else:
+                self.logger.info("Root window exists, attempting to show it")
+                self.root.deiconify()  # 重新显示窗口
+                self.logger.info("Window deiconified")
+                self.root.lift()  # 将窗口提升到最前
+                self.logger.info("Window lifted")
+                self.root.focus_force()  # 强制获取焦点
+                self.logger.info("Window focus forced")
+            self.is_visible = True
+            self.logger.info("Window shown successfully")
+        except Exception as e:
+            self.logger.error(f"Error in show method: {str(e)}")
+            raise
 
     def hide(self):
         """隐藏图形界面"""
         self.logger.info("Hide GUI requested")
-        if self.root is not None:
-            self.root.withdraw()
-            self.is_visible = False
-            self.logger.info("Window hidden")
+        try:
+            if self.root is not None:
+                self.logger.info("Root window exists, attempting to hide it")
+                self.root.withdraw()  # 使用withdraw而不是destroy
+                self.logger.info("Window withdrawn")
+                self.is_visible = False
+                self.logger.info("Window hidden successfully")
+            else:
+                self.logger.info("Root window is None, nothing to hide")
+        except Exception as e:
+            self.logger.error(f"Error in hide method: {str(e)}")
+            raise
 
     def quit(self):
         """退出图形界面"""
