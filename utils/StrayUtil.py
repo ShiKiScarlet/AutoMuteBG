@@ -6,6 +6,7 @@ import win32api
 import win32con
 from PIL import Image
 from injector import singleton, inject
+import sys
 
 from utils.GetProcessUtil import get_all_audio_sessions, get_all_window_processes
 from utils.ConfigUtil import ConfigUtil
@@ -15,6 +16,16 @@ from utils.GUIUtil import GUIUtil
 
 def _open_site():
     webbrowser.open('https://gitee.com/lingkai5wu/AutoMuteBG')
+
+
+def get_resource_path(relative_path):
+    """获取资源文件的绝对路径"""
+    try:
+        # PyInstaller创建临时文件夹,将路径存储在_MEIPASS中
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 
 @singleton
@@ -32,7 +43,8 @@ class StrayUtil:
     def run_detached(self):
         """在后台运行系统托盘图标"""
         self.logger.info("Starting stray.")
-        icon_path = os.path.join("resource", "mute.ico")
+        icon_path = get_resource_path(os.path.join("resource", "mute.ico"))
+        self.logger.info(f"Loading icon from: {icon_path}")
         image = Image.open(icon_path)
 
         def on_exit(icon, item):
