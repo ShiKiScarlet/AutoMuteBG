@@ -57,7 +57,6 @@ class AudioUtil:
                 if stop_easing_thread():
                     break
                 cur_volume = f(i + 1, this_last_volume, c, self.config["easing"]["steps"])
-                # print("sep:{:}, {:.2f} -> {:.2f}".format(i, self.last_volume, cur_volume))
                 no_easing(cur_volume)
                 time.sleep(self.config["easing"]["duration"] / self.config["easing"]["steps"])
 
@@ -83,13 +82,18 @@ class AudioUtil:
 
     def loop(self):
         self.logger.info("Starting loop.")
-        while not self.event.isSet() and self.process_util.is_running():
-            if self.process_util.is_window_in_foreground():
-                self.set_volume(self.config["fg_volume"])
-            else:
-                self.set_volume(self.config["bg_volume"])
-            time.sleep(self.config["loop_interval"])
-        else:
+        try:
+            while not self.event.isSet() and self.process_util.is_running():
+                if self.process_util.is_window_in_foreground():
+                    self.set_volume(self.config["fg_volume"])
+                else:
+                    self.set_volume(self.config["bg_volume"])
+                time.sleep(self.config["loop_interval"])
+        finally:
             self.stop_easing_thread = True
-            self.session.SimpleAudioVolume.SetMasterVolume(self.config["fg_volume"], None)
+            # 确保在退出时恢复前台音量
+            try:
+                self.session.SimpleAudioVolume.SetMasterVolume(self.config["fg_volume"], None)
+            except Exception as e:
+                self.logger.error(f"Error setting final volume: {str(e)}")
             self.logger.info("Exiting loop.")
