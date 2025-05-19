@@ -31,7 +31,7 @@ class AudioUtil:
         self.last_target_volume = None
         self.last_volume = None
         self.easing_thread = None
-        self.stop_easing_thread = False
+        self.stop_easing_thread = threading.Event()  # 使用Event来控制线程停止
 
         # 运行函数
         self._check_fg_volume()
@@ -46,15 +46,18 @@ class AudioUtil:
 
     def set_volume(self, volume: float):
         def no_easing(cur_volume=volume):
-            self.session.SimpleAudioVolume.SetMasterVolume(cur_volume, None)
-            self.last_volume = cur_volume
+            try:
+                self.session.SimpleAudioVolume.SetMasterVolume(cur_volume, None)
+                self.last_volume = cur_volume
+            except Exception as e:
+                self.logger.error(f"Error setting volume: {str(e)}")
 
-        def easing(stop_easing_thread):
+        def easing(stop_event):
             f = _ease_in_cubic if self.last_volume < volume else _ease_out_cubic
             c = volume - self.last_volume
             this_last_volume = self.last_volume
             for i in range(self.config["easing"]["steps"]):
-                if stop_easing_thread():
+                if stop_event.is_set():
                     break
                 cur_volume = f(i + 1, this_last_volume, c, self.config["easing"]["steps"])
                 no_easing(cur_volume)
@@ -62,19 +65,20 @@ class AudioUtil:
 
         def stop_easing():
             if self.easing_thread is not None and self.easing_thread.is_alive():
-                self.stop_easing_thread = True
-                self.easing_thread.join()
-                self.stop_easing_thread = False
+                self.stop_easing_thread.set()
+                self.easing_thread.join(timeout=1.0)  # 添加超时确保不会无限等待
+                self.stop_easing_thread.clear()  # 重置事件状态
 
         if self.last_target_volume != volume:
             self.last_target_volume = volume
             if self.config["easing"] is None or self.last_volume is None:
                 no_easing()
             else:
-                stop_easing()
+                stop_easing()  # 停止之前的easing线程
+                self.stop_easing_thread.clear()  # 确保事件为清除状态
                 self.easing_thread = threading.Thread(
                     target=easing,
-                    args=(lambda: self.stop_easing_thread,),
+                    args=(self.stop_easing_thread,),
                     name="EasingThread",
                     daemon=True
                 )
@@ -83,14 +87,18 @@ class AudioUtil:
     def loop(self):
         self.logger.info("Starting loop.")
         try:
-            while not self.event.isSet() and self.process_util.is_running():
+            while not self.event.is_set() and self.process_util.is_running():
                 if self.process_util.is_window_in_foreground():
                     self.set_volume(self.config["fg_volume"])
                 else:
                     self.set_volume(self.config["bg_volume"])
                 time.sleep(self.config["loop_interval"])
         finally:
-            self.stop_easing_thread = True
+            # 停止easing线程
+            if self.easing_thread is not None and self.easing_thread.is_alive():
+                self.stop_easing_thread.set()
+                self.easing_thread.join(timeout=1.0)
+                
             # 当线程被停止时，恢复原始音量
             try:
                 original_volume = self.session.SimpleAudioVolume.GetMasterVolume()

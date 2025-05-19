@@ -64,11 +64,13 @@ def main():
     config_watcher.start_watching()
 
     # 启动后台扫描线程
-    threading.Thread(
+    bg_scanner_thread = threading.Thread(
         target=thread_util.background_scanner,
         name="BGScannerThread",
         daemon=True
-    ).start()
+    )
+    bg_scanner_thread.start()
+    thread_util.scanner_thread = bg_scanner_thread
 
     # 启动系统托盘图标
     stray_util.run_detached()
@@ -83,6 +85,18 @@ def main():
     event = injector.get(threading.Event)
     event.wait()
 
+    # 确保所有线程正确终止
+    event.set()  # 设置全局退出事件
+    
+    # 调用线程清理方法
+    logger.info("Cleaning up all threads...")
+    thread_util.cleanup_all_threads()
+    
+    # 等待一段时间，让线程有时间清理
+    cleanup_timeout = 2.0  # 秒
+    logger.info(f"Waiting {cleanup_timeout} seconds for threads to cleanup...")
+    threading.Event().wait(timeout=cleanup_timeout)
+    
     # 清理资源
     lock_util.remove_lock()
 

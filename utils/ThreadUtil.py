@@ -21,6 +21,7 @@ class ThreadUtil:
         self.logger = logger_util.logger
         self.audio_threads = {}  # 存储正在运行的音频控制线程
         self.thread_events = {}  # 存储每个线程的独立事件
+        self.scanner_thread = None  # 存储后台扫描线程
 
     def start_audio_control_threads(self):
         """启动音频控制线程"""
@@ -40,11 +41,7 @@ class ThreadUtil:
             for process_name in list(self.audio_threads.keys()):
                 if process_name not in configured_processes:
                     self.logger.info(f"Stopping audio control for unchecked process: {process_name}")
-                    if process_name in self.thread_events:
-                        self.thread_events[process_name].set()  # 设置事件以停止线程
-                        self.audio_threads[process_name].join(timeout=2)  # 等待线程结束
-                        del self.thread_events[process_name]
-                    del self.audio_threads[process_name]
+                    self._stop_thread(process_name)
 
             # 启动新的音频控制线程
             for session in sessions:
@@ -63,13 +60,36 @@ class ThreadUtil:
             for process_name in list(self.audio_threads.keys()):
                 if not self.audio_threads[process_name].is_alive():
                     self.logger.info(f"Cleaning up dead thread for process: {process_name}")
-                    del self.audio_threads[process_name]
-                    if process_name in self.thread_events:
-                        del self.thread_events[process_name]
+                    self._clean_thread_resources(process_name)
 
         except Exception as e:
             self.logger.error(f"Error in start_audio_control_threads: {str(e)}")
             raise
+
+    def _stop_thread(self, process_name):
+        """停止指定进程的线程"""
+        if process_name in self.thread_events:
+            self.thread_events[process_name].set()  # 设置事件以停止线程
+            if process_name in self.audio_threads and self.audio_threads[process_name].is_alive():
+                self.audio_threads[process_name].join(timeout=2)  # 等待线程结束，最多等待2秒
+            self._clean_thread_resources(process_name)
+
+    def _clean_thread_resources(self, process_name):
+        """清理线程资源"""
+        if process_name in self.thread_events:
+            del self.thread_events[process_name]
+        if process_name in self.audio_threads:
+            del self.audio_threads[process_name]
+
+    def cleanup_all_threads(self):
+        """清理所有线程资源"""
+        self.logger.info("Cleaning up all audio control threads")
+        # 停止所有音频控制线程
+        for process_name in list(self.audio_threads.keys()):
+            self._stop_thread(process_name)
+        # 清空集合
+        self.audio_threads.clear()
+        self.thread_events.clear()
 
     def background_scanner(self):
         CoInitialize()
@@ -77,6 +97,12 @@ class ThreadUtil:
         config = self.config_util.config
         bg_scan_interval = config["setting"]["bg_scan_interval"]
         self.logger.info(f"Starting with scan interval: {bg_scan_interval}s")
-        while True:
+        while not self.event.is_set():
             self.start_audio_control_threads()
-            time.sleep(bg_scan_interval)
+            # 使用等待事件的方式而不是简单的sleep，这样可以更快响应退出信号
+            if self.event.wait(timeout=bg_scan_interval):
+                break
+        
+        # 退出前清理所有线程
+        self.cleanup_all_threads()
+        self.logger.info("Background scanner thread exiting")

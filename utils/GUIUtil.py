@@ -28,9 +28,15 @@ class GUIUtil:
         self.scrollable_frame = None
         self.auto_refresh_timer = None
         self.logger.info("GUIUtil initialized")
+        # 添加全局图标缓存字典
+        self._icon_cache = {}
 
     def get_process_icon(self, process_name):
-        """获取进程的图标"""
+        """获取进程的图标，使用缓存机制减少重复获取"""
+        # 检查缓存中是否已有该进程的图标
+        if process_name in self._icon_cache:
+            return self._icon_cache[process_name]
+            
         try:
             # 获取进程路径
             for session in get_real_time_process_list()[1]:  # 使用新的实时获取函数
@@ -68,9 +74,14 @@ class GUIUtil:
             hdc.DeleteDC()
             win32gui.DeleteObject(hbmp.GetHandle())
 
-            return ImageTk.PhotoImage(img)
+            icon = ImageTk.PhotoImage(img)
+            # 缓存图标
+            self._icon_cache[process_name] = icon
+            return icon
         except Exception as e:
             self.logger.error(f"Error getting icon for {process_name}: {str(e)}")
+            # 缓存失败结果，避免重复尝试
+            self._icon_cache[process_name] = None
             return None
 
     def update_config(self):
@@ -104,23 +115,42 @@ class GUIUtil:
         """刷新进程列表"""
         self.logger.info("Refreshing process lists...")
         try:
-            # 清除现有的复选框
-            for widget in self.scrollable_frame.winfo_children():
-                widget.destroy()
-            self.process_vars.clear()
-            self.process_icons.clear()
-
             # 获取最新的进程列表
-            window_processes, audio_sessions = get_real_time_process_list()
+            window_processes, audio_sessions = get_real_time_process_list(force_refresh=True)
             self.logger.info(f"Process lists refreshed. Found {len(window_processes)} window processes and {len(audio_sessions)} audio sessions")
 
             # 获取当前配置的进程
             current_processes = set(self.config_util.config['processes'].keys())
 
-            # 为每个进程创建复选框
+            # 获取当前GUI中显示的进程名称
+            current_gui_processes = set(self.process_vars.keys())
+            
+            # 获取音频会话中所有进程的名称
+            audio_process_names = {session.Process.name() for session in audio_sessions}
+            
+            # 需要从GUI中移除的进程
+            processes_to_remove = current_gui_processes - audio_process_names
+            
+            # 需要添加到GUI中的进程
+            processes_to_add = audio_process_names - current_gui_processes
+            
+            # 移除不再存在的进程
+            for process_name in processes_to_remove:
+                if process_name in self.process_vars:
+                    # 找到对应的widget并销毁
+                    for widget in self.scrollable_frame.winfo_children():
+                        if hasattr(widget, 'process_name') and widget.process_name == process_name:
+                            widget.destroy()
+                            break
+                    # 清理资源
+                    del self.process_vars[process_name]
+                    if process_name in self.process_icons:
+                        del self.process_icons[process_name]
+
+            # 添加新的进程
             for session in audio_sessions:
                 process_name = session.Process.name()
-                if process_name not in self.process_vars:
+                if process_name in processes_to_add:
                     var = tk.BooleanVar(value=process_name in current_processes)
                     self.process_vars[process_name] = var
 
@@ -137,7 +167,12 @@ class GUIUtil:
                         compound=tk.LEFT,
                         command=self.update_config
                     )
+                    # 添加属性以便后续标识
+                    cb.process_name = process_name
                     cb.pack(anchor=tk.W, padx=5, pady=2)
+                # 更新已有进程的勾选状态（配置可能已更改）
+                elif process_name in current_gui_processes:
+                    self.process_vars[process_name].set(process_name in current_processes)
 
             self.logger.info("Process list refreshed successfully")
         except Exception as e:
