@@ -98,11 +98,11 @@ class StrayUtil:
             name="StrayThread",
             daemon=True
         ).start()
-
+    
     def show_version_info(self):
         version_info = "后台应用自动静音器\n让设定的进程在后台时自动静音，切换到前台恢复。\n版本: 0.2.2 Dev\n开源地址: github.com/lingkai5wu/AutoMuteBG"
         win32api.MessageBox(0, version_info, "关于Auto Mute Background", 0x40) 
-    
+
     def _save_process_list_to_txt(self):
         filename = "process_name.txt"
         window_processes, audio_sessions = get_real_time_process_list()

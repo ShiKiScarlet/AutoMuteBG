@@ -43,6 +43,7 @@ class LoggerUtil:
         # 设置控制台日志输出
         console_handler = logging.StreamHandler()
         console_handler.setFormatter(formatter)
+        console_handler.setLevel(logging.WARNING)  # 控制台只显示警告和错误
         logger.addHandler(console_handler)
 
         if self.max_log_files > 0:
@@ -50,6 +51,7 @@ class LoggerUtil:
             log_file = os.path.join(self.log_dir, datetime.now().strftime("%Y%m%d%H%M%S") + ".log")
             file_handler = logging.FileHandler(log_file)
             file_handler.setFormatter(formatter)
+            file_handler.setLevel(logging.INFO)  # 文件保持详细日志
             logger.addHandler(file_handler)
 
         return logger
