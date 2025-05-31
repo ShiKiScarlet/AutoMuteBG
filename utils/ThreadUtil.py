@@ -28,8 +28,8 @@ class ThreadUtil:
         try:
             # 获取当前所有音频会话
             sessions = get_real_time_process_list()[1]
-            self.logger.info(f"Getting fresh audio sessions list")
-            self.logger.info(f"Found {len(sessions)} audio sessions")
+            # self.logger.info(f"Getting fresh audio sessions list")
+            # self.logger.info(f"Found {len(sessions)} audio sessions")
 
             # 获取配置的进程列表
             configured_processes = set(self.config_util.config['processes'].keys())
