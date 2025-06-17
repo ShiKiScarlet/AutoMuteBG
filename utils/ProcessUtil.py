@@ -17,7 +17,12 @@ class ProcessUtil:
         self.known_non_matching_pids = set()
 
     def is_running(self):
-        return self.process.is_running()
+        """检查进程是否仍在运行"""
+        try:
+            return self.process.is_running()
+        except psutil.NoSuchProcess:
+            self.logger.warning(f"进程 {self.pid} 不再存在。")
+            return False
 
     def is_window_in_foreground(self):
         """检查进程的窗口是否处于前台，支持PID变化的情况"""
@@ -66,8 +71,10 @@ class ProcessUtil:
                 return
             try:
                 _, window_pid = win32process.GetWindowThreadProcessId(hwnd)
-                if window_pid == self.pid:
-                    res.append(hwnd)
+                # 检查进程是否仍在运行
+                if psutil.pid_exists(window_pid):
+                    if window_pid == self.pid:
+                        res.append(hwnd)
             except Exception:
                 pass
 
