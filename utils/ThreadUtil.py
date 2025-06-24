@@ -1,5 +1,6 @@
 import threading
 import time
+import psutil
 
 from comtypes import CoInitialize
 from injector import Injector, singleton, inject
@@ -48,6 +49,10 @@ class ThreadUtil:
                 process_name = session.Process.name()
                 if process_name in configured_processes and process_name not in running_processes:
                     self.logger.info(f"Found target process: {process_name} (PID: {session.ProcessId})")
+                    # 检查进程是否仍在运行
+                    if not psutil.pid_exists(session.ProcessId):
+                        self.logger.error(f"Process no longer exists (PID: {session.ProcessId})")
+                        continue  # 跳过已结束的进程
                     # 为每个线程创建独立的事件
                     thread_event = threading.Event()
                     self.thread_events[process_name] = thread_event

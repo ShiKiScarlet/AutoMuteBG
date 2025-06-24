@@ -87,12 +87,18 @@ class AudioUtil:
     def loop(self):
         self.logger.info("Starting loop.")
         try:
-            while not self.event.is_set() and self.process_util.is_running():
+            while not self.event.is_set():
+                # 检查进程是否仍在运行
+                if not self.process_util.is_running():
+                    self.logger.error(f"Process no longer exists (PID: {self.process_util.pid})")
+                    break  # 退出循环
                 if self.process_util.is_window_in_foreground():
                     self.set_volume(self.config["fg_volume"])
                 else:
                     self.set_volume(self.config["bg_volume"])
                 time.sleep(self.config["loop_interval"])
+        except Exception as e:
+            self.logger.error(f"Error in audio control loop: {str(e)}")
         finally:
             # 停止easing线程
             if self.easing_thread is not None and self.easing_thread.is_alive():
@@ -106,4 +112,4 @@ class AudioUtil:
                     self.session.SimpleAudioVolume.SetMasterVolume(self.config["fg_volume"], None)
             except Exception as e:
                 self.logger.error(f"Error setting final volume: {str(e)}")
-            self.logger.info("Exiting loop.")
+        self.logger.info("Exiting loop.")
