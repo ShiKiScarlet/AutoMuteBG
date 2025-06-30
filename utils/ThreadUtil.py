@@ -53,6 +53,10 @@ class ThreadUtil:
                     if not psutil.pid_exists(session.ProcessId):
                         self.logger.error(f"Process no longer exists (PID: {session.ProcessId})")
                         continue  # 跳过已结束的进程
+                    # 检查 PID 是否为正整数
+                    if session.ProcessId <= 0:
+                        self.logger.error(f"Invalid PID detected: {session.ProcessId}")
+                        continue  # 跳过无效的 PID
                     # 为每个线程创建独立的事件
                     thread_event = threading.Event()
                     self.thread_events[process_name] = thread_event
@@ -61,11 +65,11 @@ class ThreadUtil:
                     thread.start()
                     self.audio_threads[process_name] = thread
 
-            # 清理已结束的线程
-            for process_name in list(self.audio_threads.keys()):
-                if not self.audio_threads[process_name].is_alive():
-                    self.logger.info(f"Cleaning up dead thread for process: {process_name}")
-                    self._clean_thread_resources(process_name)
+                # 清理已结束的线程
+                for process_name in list(self.audio_threads.keys()):
+                    if not self.audio_threads[process_name].is_alive():
+                        self.logger.info(f"Cleaning up dead thread for process: {process_name}")
+                        self._clean_thread_resources(process_name)
 
         except Exception as e:
             self.logger.error(f"Error in start_audio_control_threads: {str(e)}")

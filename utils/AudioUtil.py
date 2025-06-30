@@ -88,6 +88,9 @@ class AudioUtil:
         self.logger.info("Starting loop.")
         try:
             while not self.event.is_set():
+                if self.session.ProcessId <= 0:
+                    self.logger.error(f"Invalid PID detected: {self.session.ProcessId}")
+                    break  # 退出循环
                 # 检查进程是否仍在运行
                 if not self.process_util.is_running():
                     self.logger.error(f"Process no longer exists (PID: {self.process_util.pid})")
